@@ -1,5 +1,5 @@
-# RP2040 Servo Driver for Chica
-This driver implements [Pimoroni's Servo 2040 board](https://shop.pimoroni.com/products/servo-2040?variant=39800591679571), a RP2040 based servo driver intended to work with Make Your Pet's [Chica Server](https://play.google.com/store/apps/details?id=com.makeyourpet.chicaserver&hl=en_US&gl=US) android app.
+# RP2040 Servo Driver for PIROBOT
+This driver implements [Pimoroni's Servo 2040 board](https://shop.pimoroni.com/products/servo-2040?variant=39800591679571), a RP2040 based servo driver developed specifically for the PIROBOT hexapod platform.
 
 ## Loading the Firmware Image
 To load the firmware onto the servo 2040 board, perform the following steps:
@@ -25,17 +25,17 @@ Keep in mind that the screw terminals for supplying external power (with reverse
 This application requires an external power source greater than 5V to power the servos through the terminal block of the board.  **If you want to run servos with a higher voltage than 5V, you'll need to _cut the 'Separate USB and Ext. Power' trace on the back of the board_ to prevent the RP2040 or _your machine_ being damaged by the increased voltage.**
 
 ### ***Battery Power Warning***:
-Although this application doesn't require it, the servo 2040 can be powered by a 5V battery through the 5V/GND pins, instead of through the USB-C port. **When sourcing power through the 5V pins, it's important to _use a data-only USB adapter/cable_ to program the board.** This will prevent the 5V battery and from backfeeding to the 5V source provide by the USB device. 
+Although this application doesn't require it, the servo 2040 can be powered by a 5V battery through the 5V/GND pins, instead of through the USB-C port. **When sourcing power through the 5V pins, it's important to _use a data-only USB adapter/cable_ to program the board.** This will prevent the 5V battery from backfeeding to the 5V source provided by the USB device. 
 
 ## Hexapod Robot Build
 ## Servos
 The two most recommend servos to be used for this project are the [ZOSKAY 35kg coreless servos](https://www.amazon.com/dp/B07SBYZ4G5?_encoding=UTF8&ref_=cm_sw_r_cp_ud_dp_FHYWJWD1TXGTMJDHJMWC&th=1) [[Alternate Link]](https://www.aliexpress.us/item/2251832824472591.html?spm=a2g0o.order_detail.0.0.2e03f19c3p5o3j&gatewayAdapt=glo2usa4itemAdapt&_randl_shipto=US) and the [Feetech 35kg cored servos](https://www.robotshop.com/products/feetech-180-degrees-digital-servo-74v-35kg-cm-ft5330m). The current hexapod design will only work with the ZOSKAY servos out-of-the-box. 
 
 ## 3D Printed Chassis
-All 3D printed designs, BOM, wiring guides, and build information for the hexapod can be found on Make Your Pet's [hexapod repository](https://github.com/MakeYourPet/hexapod).
+All 3D printed designs, BOM, wiring guides, and build information for the PIROBOT hexapod can be found in the accompanying documentation.
 
 # Software
-The hexapod driver application is compliant with the Chica server application and follows the [Chica servo communication protocol specifications](https://docs.google.com/document/d/1mZwbWAyVBaSGiShjaIyb4V5swsjEJnEGjClIcWYX3S0/edit).
+The hexapod driver application is specifically designed for the PIROBOT platform and follows a standard servo communication protocol.
 
 ## Features
 ### Virtual Com Port
@@ -46,24 +46,126 @@ When the hexapod is powered down, the application will de-assert the servo power
 
 For redundancy, the application will also disable PWM signal outputs on all servos, which effectively disables the servos by removing torque. This has the added benefit of making a physical servo power relay for the hexapod optional. 
 
-### Tools
-The Chica server application requires servo calibration values as input to its config.txt file to improve servo positioning accuracy as demonstrated in MYP's [servo calibration video](https://www.youtube.com/watch?v=UMUeKFPptU4).
+### Calibration Tools
+The servo calibration process improves positioning accuracy for precise hexapod movements.
 
-The ServoCalibration directory contains _servoCalibration.uf2_, along with the .stl files for the physical components needed for calibration (provided by MYP). This useful program streamlines the PWM value acquisition process for config.txt. A table will be produced at the end of the program, which you can copy or take a screenshot for later. All done without needing to buy a seperate servo calibrator! [A tutorial video for using servoCalibration.uf2 can be found here](https://youtu.be/w5ZRXiZLpTk).
+The ServoCalibration directory contains _servoCalibration.uf2_, along with the .stl files for the physical components needed for calibration. This useful program streamlines the PWM value acquisition process for configuration. A table will be produced at the end of the program, which you can copy or take a screenshot for later. All done without needing to buy a separate servo calibrator!
+
+## Python Test Tools
+
+The `python_tests` directory contains a collection of Python tools for testing and controlling the Servo2040 board. These tools can be used to test servo positions, run movement sequences, and perform hexapod robot control.
+
+### 1. Hexapod Servo Control (`hexapod_servo_control.py`)
+
+This powerful tool allows you to control all 18 servos for the hexapod robot. It can read kinematic angle data from an external file, simulate wave gait, perform sine wave testing, and run a comprehensive calibration sequence for the servos.
+
+#### Usage:
+
+```bash
+python hexapod_servo_control.py [OPTIONS]
+```
+
+#### Command Line Options:
+
+- `--port PORT`: Serial port (default: /dev/ttyACM0)
+- `--verbose, -v`: Enable verbose output
+- `--center`: Center all servos
+- `--sine`: Run sine wave test
+- `--wave`: Run wave gait test
+- `--calibrate`: Run calibration sequence
+- `--angles [ANGLES ...]`: Set specific angles for all 18 servos
+- `--file FILE`: Read angles from a file (kinematic_positions.txt)
+- `--offsets [OFFSETS ...]`: Center offsets for servos (18 values)
+- `--delay DELAY`: Delay between movements in seconds (default: 0.1)
+- `--cycle-delay CYCLE_DELAY`: Delay between cycles in seconds (default: 0.5)
+
+#### Examples:
+
+```bash
+# Center all servos
+python hexapod_servo_control.py --center
+
+# Run sine wave test
+python hexapod_servo_control.py --sine
+
+# Run wave gait test
+python hexapod_servo_control.py --wave
+
+# Run servo calibration sequence
+python hexapod_servo_control.py --calibrate
+
+# Specify custom angles
+python hexapod_servo_control.py --angles 0 10 20 -10 -20 -30 15 25 35 -15 -25 -35 5 15 25 -5 -15 -25
+
+# Read kinematic angles from file and use custom delays
+python hexapod_servo_control.py --file kinematic_positions.txt --delay 0.2 --cycle-delay 0.5
+
+# Center with servo offset values
+python hexapod_servo_control.py --offsets 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 --center
+```
+
+### 2. Servo Sweep Test (`servo_test_simple.py`)
+
+This tool moves the specified servo motor between minimum and maximum positions in steps. It can be used to test the full range of motion of the servo.
+
+#### Usage:
+
+```bash
+python servo_test_simple.py
+```
+
+### 3. Microswitch Test (`microswitch_test.py`)
+
+A tool for testing microswitches on the Servo2040 board.
+
+### 4. Power Test (`power_test.py`)
+
+A tool for testing the power features of the Servo2040 board.
+
+### 5. LED Test (`led_test.py`)
+
+A tool for testing the RGB LEDs on the Servo2040 board.
+
+### 6. GPIO Test (`gpio_test.py`)
+
+A tool for testing GPIO pins on the Servo2040 board.
+
+## Kinematic Position File
+
+The `kinematic_positions.txt` file contains 24 positions that make up a complete step cycle for the hexapod robot. Each line contains 18 angle values (in degrees) to position the robot's legs. This file can be used with `hexapod_servo_control.py` to achieve continuous walking movement.
 
 # Development 
 ## Dependencies 
-This application was witten in C++ to maximize speed and performance.
+This application was written in C++ to maximize speed and performance.
 
-The [pico-SDK](https://github.com/raspberrypi/pico-sdk) and [pimoroni-pico
-](https://github.com/pimoroni/pimoroni-pico) are required libraries needed for proper servo 2040 development and operation. It's recommended start development by running a "hello world" example using pico-SDK. Then slowly modifying CMake files and dependancies to migrate the pimoroni-pico library into your development enviroment (this is the tricky part!) and implementing the [C++ pimoroni servo2040 examples](https://github.com/pimoroni/pimoroni-pico/tree/main/examples/servo2040) one at a time.
+The [pico-SDK](https://github.com/raspberrypi/pico-sdk) and [pimoroni-pico](https://github.com/pimoroni/pimoroni-pico) are required libraries needed for proper servo 2040 development and operation. It's recommended to start development by running a "hello world" example using pico-SDK. Then slowly modifying CMake files and dependencies to migrate the pimoroni-pico library into your development environment (this is the tricky part!) and implementing the [C++ pimoroni servo2040 examples](https://github.com/pimoroni/pimoroni-pico/tree/main/examples/servo2040) one at a time.
 
-Development on the servo 2040 can also be done using Micropython, but this is outside the scope of this repository. A tutorial for setting up a micropython development enviroment can be found [here](https://github.com/pimoroni/pimoroni-pico/blob/main/setting-up-micropython.md).
+Development on the servo 2040 can also be done using Micropython, but this is outside the scope of this repository. A tutorial for setting up a micropython development environment can be found [here](https://github.com/pimoroni/pimoroni-pico/blob/main/setting-up-micropython.md).
+
+## C++ Build Steps
+
+```bash
+# Set required environment variables
+export PICO_SDK_PATH=~/pico-sdk
+export PIMORONI_PICO_PATH=~/pimoroni-pico
+
+# If CMake configuration changed, clean the build
+rm -rf build
+
+# Create build directory and configure
+mkdir -p build
+cd build
+cmake ..
+
+# Compile
+make -j$(nproc)  # or
+make -j4         # for 4-core systems
+```
 
 # Community & Feedback
-This repository and the hexapod project is part of an active community constantly innovating hexapod robots. Please consider joining the [discord channel](https://discord.gg/vb8YWMfBuk) if you would like to make your own hexapod and become part of the community.
+This repository and the hexapod project is part of an active community constantly innovating hexapod robots. If you would like to make your own hexapod robot and become part of the community, your participation is welcome.
 
-Bug reports, feature request, and general feedback for this repository would be greatly appreciated. Thank you! 
+Bug reports, feature requests, and general feedback for this repository would be greatly appreciated. Thank you!
 
 
 
