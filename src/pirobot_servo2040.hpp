@@ -44,6 +44,13 @@ private:
     static constexpr uint GETC_TIMEOUT_US = 100;    // getchar_timeout_us için zaman aşımı
     
     // Komut indeks sabitleri
+    static constexpr uint A0_IDX = 19;              // A0 komutu indeksi
+    static constexpr uint A1_IDX = 20;              // A1 komutu indeksi
+    static constexpr uint A2_IDX = 21;              // A2 komutu indeksi
+    static constexpr uint TOUCH_START_IDX = 22;     // Dokunmatik sensör başlangıç indeksi
+    static constexpr uint TOUCH_END_IDX = 27;       // Dokunmatik sensör bitiş indeksi
+    static constexpr uint CURRENT_IDX = 28;         // Akım ölçüm indeksi
+    static constexpr uint VOLTAGE_IDX = 29;         // Voltaj ölçüm indeksi
     static constexpr uint LED_IDX_BASE = 32;        // LED komutları başlangıç indeksi
     static constexpr uint LED_IDX_MAX = 37;         // LED komutları bitiş indeksi (dahil)
     static constexpr uint NUM_LEDS = 6;             // LED sayısı

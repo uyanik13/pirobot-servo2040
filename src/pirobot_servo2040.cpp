@@ -30,11 +30,32 @@ void PirobotServo2040::run() {
     }
 }
 
+// old  logic
 void PirobotServo2040::_parseAndProcessCommands() {
     int input = getchar_timeout_us(GETC_TIMEOUT_US);
     
     while (input != PICO_ERROR_TIMEOUT) {
-        // Byte'ı protokol işleyiciye gönder
+        // Check for direct GPIO commands first
+        // if (input == CommProtocol::SET_CMD || input == CommProtocol::GET_CMD) {
+        //     uint8_t cmd = input;
+        //     int pin_byte = getchar_timeout_us(GETC_TIMEOUT_US);
+            
+        //     if (pin_byte != PICO_ERROR_TIMEOUT) {
+        //         int value_byte = getchar_timeout_us(GETC_TIMEOUT_US);
+                
+        //         if (value_byte != PICO_ERROR_TIMEOUT) {
+        //             // A0/A1/A2 pinleri için özel işleme (GPIO 26, 27, 28)
+        //             if (pin_byte == A0_GPIO_PIN || pin_byte == A1_GPIO_PIN || pin_byte == A2_GPIO_PIN) {
+        //                 // GPIO komutu olarak işle
+        //                 _gpioManager->handleCommand(cmd, pin_byte, value_byte);
+        //                 input = getchar_timeout_us(GETC_TIMEOUT_US);
+        //                 continue;  // Sonraki komuta geç
+        //             }
+        //         }
+        //     }
+        // }
+        
+        // Normal protocol processing for non-GPIO commands
         if (_commProtocol->processByte((uint8_t)input)) {
             // Tam bir komut paketi alındı
             auto& packet = _commProtocol->getCurrentPacket();
@@ -68,22 +89,23 @@ void PirobotServo2040::_processSetCommand(const CommProtocol::CommandPacket& pac
         if (startIdx <= SERVO_IDX_MAX) {
             _servoDriver->moveServo(startIdx, value, false);
         }
-        // RELAY pini - 19 değerinde olmalı
-        else if (startIdx == 19) {  // RELAY (A0)
-            // RELAY komutları servo2040'ta göz ardı edilir
-            // Servolar her zaman etkin
+        // RELAY pini - A0_IDX değerinde olmalı
+        else if (startIdx == A0_IDX) {  // RELAY (A0)
+            // GPIOManager ile A0 (RELAY) pini kontrolü
+            bool state = value ? true : false;
+            _gpioManager->setA0(state);
         }
-        // A1 pini - 20 değerinde olmalı
-        else if (startIdx == 20) {  // A1
+        // A1 pini - A1_IDX değerinde olmalı
+        else if (startIdx == A1_IDX) {  // A1
             bool state = value ? true : false;
             _gpioManager->setA1(state);
         }
-        // A2 pini - 21 değerinde olmalı
-        else if (startIdx == 21) {  // A2
+        // A2 pini - A2_IDX değerinde olmalı
+        else if (startIdx == A2_IDX) {  // A2
             bool state = value ? true : false;
             _gpioManager->setA2(state);
         }
-        // LED komutları - 32-37 arası (6 LED)
+        // LED komutları - LED_IDX_BASE ile LED_IDX_MAX arası
         else if (startIdx >= LED_IDX_BASE && startIdx <= LED_IDX_MAX) {
             uint ledIdx = startIdx - LED_IDX_BASE;
             
@@ -114,21 +136,33 @@ void PirobotServo2040::_processGetCommand(const CommProtocol::CommandPacket& pac
         if (startIdx <= SERVO_IDX_MAX) {
             values[i] = _servoDriver->getServoPosition(startIdx);
         }
-        // Dokunmatik sensör değeri oku - 19 ile başlar
-        else if (startIdx >= 19 && startIdx <= 24) {  // TS1-TS6 (19-24)
-            uint sensorIdx = startIdx - 19;
+        // A0 durumunu oku
+        else if (startIdx == A0_IDX) {  // A0/
+            values[i] = _gpioManager->getA0() ? 1 : 0;
+        }
+        // A1 durumunu oku
+        else if (startIdx == A1_IDX) {  // A1
+            values[i] = _gpioManager->getA1() ? 1 : 0;
+        }
+        // A2 durumunu oku
+        else if (startIdx == A2_IDX) {  // A2
+            values[i] = _gpioManager->getA2() ? 1 : 0;
+        }
+        // Dokunmatik sensör değeri oku
+        else if (startIdx >= TOUCH_START_IDX && startIdx <= TOUCH_END_IDX) {  // TS1-TS6
+            uint sensorIdx = startIdx - TOUCH_START_IDX;
             float sensor_voltage = _sensorManager->readTouchSensor(sensorIdx);
             // Voltajı 10-bit değere dönüştür (0-1023 arası)
             values[i] = (uint16_t)(sensor_voltage * 310.303f);
         }
-        // Akım değeri oku - 25
-        else if (startIdx == 25) {  // CURR
+        // Akım değeri oku
+        else if (startIdx == CURRENT_IDX) {  // CURR
             float current = _sensorManager->readCurrent();
             // Akımı 10-bit değere dönüştür (0-1023 arası, orta değer = 512 -> 0A)
             values[i] = (uint16_t)(current / 0.0814f) + 512;
         }
-        // Voltaj değeri oku - 26
-        else if (startIdx == 26) {  // VOLT
+        // Voltaj değeri oku
+        else if (startIdx == VOLTAGE_IDX) {  // VOLT
             float voltage = _sensorManager->readVoltage();
             // Voltajı 10-bit değere dönüştür (0-1023 arası)
             values[i] = (uint16_t)(voltage * 310.303f);

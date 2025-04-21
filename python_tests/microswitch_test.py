@@ -26,7 +26,7 @@ SWITCH_THRESHOLD = args.threshold
 ACTIVE_HIGH = args.active_high  # Active high (switch closed = high voltage)
                                 # Active low (switch closed = low voltage or ground)
 NUM_SWITCHES = 6     # Servo 2040 has 6 touch sensors we can use for switches
-TOUCH_SENSOR_BASE_IDX = 19  # Base index for touch sensors in the protocol
+TOUCH_SENSOR_BASE_IDX = 22  # Base index for touch sensors in the protocol
 
 # Command constants
 GET_CMD = 0x47 | 0x80  # 'G' with MSB set = 0xC7

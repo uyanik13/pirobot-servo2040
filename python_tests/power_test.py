@@ -30,8 +30,8 @@ CURRENT_OFFSET = args.current_offset
 GET_CMD = 0x47 | 0x80  # 'G' with MSB set = 0xC7
 
 # Sensor indices
-VOLTAGE_SENSOR_IDX = 26  # Index for voltage sensor (was 23)
-CURRENT_SENSOR_IDX = 25  # Index for current sensor (was 24)
+VOLTAGE_SENSOR_IDX = 29  # Index for voltage sensor (was 23)
+CURRENT_SENSOR_IDX = 28  # Index for current sensor (was 24)
 
 def decode_value(low_byte, high_byte):
     """Decode two 7-bit bytes into a 14-bit value as per protocol"""
