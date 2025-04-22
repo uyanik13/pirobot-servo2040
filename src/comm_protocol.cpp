@@ -1,4 +1,5 @@
 #include "comm_protocol.hpp"
+#include "tusb.h"
 
 CommProtocol::CommProtocol() {
     _resetPacketState();
@@ -78,35 +79,52 @@ CommProtocol::CommandPacket& CommProtocol::getCurrentPacket() {
 
 void CommProtocol::sendPacket(const CommandPacket& packet) {
     uint8_t cmd = (packet.type == CommandType::SET) ? SET_CMD : GET_CMD;
+    uint8_t buffer[3 + 2 * MAX_VALUES]; // Header (3 bytes) + values (2 bytes each)
+    uint16_t index = 0;
     
-    // Komut headerı gönder
-    putchar_raw(cmd);
-    putchar_raw(packet.startIdx);
-    putchar_raw(packet.count);
+    // Komut headerı ekle
+    buffer[index++] = cmd;
+    buffer[index++] = packet.startIdx;
+    buffer[index++] = packet.count;
     
-    // SET komutu için değerleri gönder
+    // SET komutu için değerleri ekle
     if (packet.type == CommandType::SET) {
         for (uint i = 0; i < packet.count; i++) {
             uint8_t low_byte, high_byte;
             encodeValue(packet.values[i], low_byte, high_byte);
-            putchar_raw(low_byte);
-            putchar_raw(high_byte);
+            buffer[index++] = low_byte;
+            buffer[index++] = high_byte;
         }
+    }
+    
+    // Tüm buffer'ı bir seferde gönder
+    if (tud_cdc_connected()) {
+        tud_cdc_write(buffer, index);
+        tud_cdc_write_flush();
     }
 }
 
 void CommProtocol::sendGetResponse(uint8_t startIdx, uint8_t count, const uint16_t* values) {
-    // Yanıt headerı gönder
-    putchar_raw(GET_CMD);
-    putchar_raw(startIdx);
-    putchar_raw(count);
+    uint8_t buffer[3 + 2 * MAX_VALUES]; // Header (3 bytes) + values (2 bytes each)
+    uint16_t index = 0;
     
-    // Değerleri gönder
+    // Yanıt headerı ekle
+    buffer[index++] = GET_CMD;
+    buffer[index++] = startIdx;
+    buffer[index++] = count;
+    
+    // Değerleri ekle
     for (uint i = 0; i < count; i++) {
         uint8_t low_byte, high_byte;
         encodeValue(values[i], low_byte, high_byte);
-        putchar_raw(low_byte);
-        putchar_raw(high_byte);
+        buffer[index++] = low_byte;
+        buffer[index++] = high_byte;
+    }
+    
+    // Tüm buffer'ı bir seferde gönder
+    if (tud_cdc_connected()) {
+        tud_cdc_write(buffer, index);
+        tud_cdc_write_flush();
     }
 }
 

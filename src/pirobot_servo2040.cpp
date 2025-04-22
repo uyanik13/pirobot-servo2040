@@ -1,16 +1,33 @@
 #include "pirobot_servo2040.hpp"
 #include "pico/stdio_usb.h"
 
+// Global instance pointer for callback function
+PirobotServo2040* g_servo2040_instance = nullptr;
+
+// TinyUSB CDC receive callback
+extern "C" void tud_cdc_rx_cb(uint8_t itf) {
+    (void) itf; // Unused parameter
+    
+    // Call the class method through the global instance
+    if (g_servo2040_instance) {
+        g_servo2040_instance->usbCdcRxCallback();
+    }
+}
+
 PirobotServo2040::PirobotServo2040() :
     _servoDriver(std::make_unique<ServoDriver>()),
     _sensorManager(std::make_unique<SensorManager>()),
     _ledManager(std::make_unique<LedManager>()),
     _gpioManager(std::make_unique<GPIOManager>()),
-    _commProtocol(std::make_unique<CommProtocol>()) {
+    _commProtocol(std::make_unique<CommProtocol>()),
+    _hasNewData(false) {
+    
+    // Set the global instance pointer for the callback
+    g_servo2040_instance = this;
 }
 
 void PirobotServo2040::init() {
-    // Stdio başlat (USB CDC için)
+    // Initialize USB and TinyUSB stack
     stdio_init_all();
     
     // Alt sistemleri başlat
@@ -25,52 +42,57 @@ void PirobotServo2040::init() {
 
 void PirobotServo2040::run() {
     while (true) {
-        // Komutları işle
-        _parseAndProcessCommands();
+        // Call TinyUSB device task to handle USB events
+        tud_task();
+        
+        // Process data if available 
+        _processCdcData();
+        
+        // Perform other tasks (sensors, servos, etc.)
+        // These tasks should be short and non-blocking
     }
 }
 
-// old  logic
-void PirobotServo2040::_parseAndProcessCommands() {
-    int input = getchar_timeout_us(GETC_TIMEOUT_US);
+void PirobotServo2040::usbCdcRxCallback() {
+    // This is called from the USB interrupt
+    // Signal the main loop that data is available
+    _hasNewData = true;
+}
+
+// New method to process CDC data in a non-blocking way
+void PirobotServo2040::_processCdcData() {
+    if (!_hasNewData || !tud_cdc_connected()) {
+        return;
+    }
+
+    // Check if data is available
+    uint32_t available = tud_cdc_available();
+    if (available == 0) {
+        _hasNewData = false;
+        return;
+    }
+
+    // Read data from CDC buffer
+    uint32_t count = tud_cdc_read(_cdcRxBuffer, CDC_RX_BUFFER_SIZE);
     
-    while (input != PICO_ERROR_TIMEOUT) {
-        // Check for direct GPIO commands first
-        // if (input == CommProtocol::SET_CMD || input == CommProtocol::GET_CMD) {
-        //     uint8_t cmd = input;
-        //     int pin_byte = getchar_timeout_us(GETC_TIMEOUT_US);
-            
-        //     if (pin_byte != PICO_ERROR_TIMEOUT) {
-        //         int value_byte = getchar_timeout_us(GETC_TIMEOUT_US);
-                
-        //         if (value_byte != PICO_ERROR_TIMEOUT) {
-        //             // A0/A1/A2 pinleri için özel işleme (GPIO 26, 27, 28)
-        //             if (pin_byte == A0_GPIO_PIN || pin_byte == A1_GPIO_PIN || pin_byte == A2_GPIO_PIN) {
-        //                 // GPIO komutu olarak işle
-        //                 _gpioManager->handleCommand(cmd, pin_byte, value_byte);
-        //                 input = getchar_timeout_us(GETC_TIMEOUT_US);
-        //                 continue;  // Sonraki komuta geç
-        //             }
-        //         }
-        //     }
-        // }
-        
-        // Normal protocol processing for non-GPIO commands
-        if (_commProtocol->processByte((uint8_t)input)) {
-            // Tam bir komut paketi alındı
+    // Process each byte
+    for (uint32_t i = 0; i < count; i++) {
+        // Process bytes using CommProtocol
+        if (_commProtocol->processByte(_cdcRxBuffer[i])) {
+            // A complete packet is received
             auto& packet = _commProtocol->getCurrentPacket();
             
-            // Komut tipine göre işle
+            // Process packet based on command type
             if (packet.type == CommProtocol::CommandType::SET) {
                 _processSetCommand(packet);
             } else if (packet.type == CommProtocol::CommandType::GET) {
                 _processGetCommand(packet);
             }
         }
-        
-        // Sonraki byte'ı al
-        input = getchar_timeout_us(GETC_TIMEOUT_US);
     }
+    
+    // Mark as processed
+    _hasNewData = false;
 }
 
 void PirobotServo2040::_processSetCommand(const CommProtocol::CommandPacket& packet) {
@@ -177,9 +199,12 @@ void PirobotServo2040::_processGetCommand(const CommProtocol::CommandPacket& pac
 }
 
 void PirobotServo2040::_waitForVCPConnection() {
-    // VCP bağlantısı kurulana kadar bekle, LED animasyonu göster
-    while (!stdio_usb_connected()) {
+    // TinyUSB bağlantı animasyonu başlat
+    while (!tud_cdc_connected()) {
         _ledManager->pendingConnectionAnimation();
+        
+        // TinyUSB task'ı işle
+        tud_task();
     }
     
     // Bağlantı kuruldu, bağlantı durumunu göster
@@ -188,7 +213,4 @@ void PirobotServo2040::_waitForVCPConnection() {
     
     // LEDleri temizle
     _ledManager->clearAllLeds();
-    
-    // Tüm servolar için merkez pozisyona git
-    // _servoDriver->centerAllServos(1500);
 }

@@ -3,12 +3,18 @@
 #include "pico/stdlib.h"
 #include <cstdint>
 #include <memory>
+#include "tusb.h"
+#include "tusb_config.h"
 
 #include "servo_driver.hpp"
 #include "sensor_manager.hpp"
 #include "led_manager.hpp"
 #include "gpio_manager.hpp"
 #include "comm_protocol.hpp"
+
+// Forward declaration for callback
+class PirobotServo2040;
+extern PirobotServo2040* g_servo2040_instance;
 
 /**
  * @brief Ana uygulama sınıfı - Servo2040 için servo kontrolü, sensör okuma ve iletişim
@@ -30,6 +36,11 @@ public:
      */
     void run();
     
+    /**
+     * @brief USB CDC veri alındığında çağrılan callback
+     */
+    void usbCdcRxCallback();
+    
 private:
     // Alt sistemler
     std::unique_ptr<ServoDriver> _servoDriver;       // Servo kontrolü
@@ -37,6 +48,13 @@ private:
     std::unique_ptr<LedManager> _ledManager;         // LED yönetimi
     std::unique_ptr<GPIOManager> _gpioManager;       // GPIO yönetimi
     std::unique_ptr<CommProtocol> _commProtocol;     // İletişim protokolü
+    
+    // USB CDC veri tamponu
+    static const uint CDC_RX_BUFFER_SIZE = 256;
+    uint8_t _cdcRxBuffer[CDC_RX_BUFFER_SIZE];
+    
+    // Veri tamponu durumu
+    bool _hasNewData;
     
     // Komut sabitleri
     static constexpr uint SERVO_IDX_MAX = 18;       // Servo indeksi üst sınırı
@@ -59,6 +77,11 @@ private:
      * @brief USB CDC veri alımını ve komut çözümlemesini işler
      */
     void _parseAndProcessCommands();
+    
+    /**
+     * @brief TinyUSB CDC verilerini işler (non-blocking)
+     */
+    void _processCdcData();
     
     /**
      * @brief Alınan SET komutunu işler

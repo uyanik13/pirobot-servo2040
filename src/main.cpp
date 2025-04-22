@@ -1,3 +1,8 @@
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "pico/multicore.h"
+#include "hardware/irq.h"
+#include "tusb.h"
 #include "pirobot_servo2040.hpp"
 
 /**
@@ -6,14 +11,15 @@
  * @return int
  */
 int main() {
-    // Ana uygulama nesnesini oluştur
-    PirobotServo2040 app;
+    // Tusb başlat
+    tusb_init();
     
-    // Sistemi başlat
-    app.init();
+    // Ana uygulamayı oluştur ve başlat
+    PirobotServo2040 pirobot;
+    pirobot.init();
     
     // Ana döngüyü çalıştır
-    app.run();
+    pirobot.run();
     
     return 0;
 } 
