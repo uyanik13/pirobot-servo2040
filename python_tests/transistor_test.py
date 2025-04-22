@@ -6,17 +6,17 @@ import binascii
 import argparse
 
 # Command constants - Bu değerler firmware'deki değerlerle eşleşmelidir
-CMD_SET_PIN = 0xD3  # Set pin command - 0x53 | 0x80
-CMD_GET_PIN = 0xC7  # Get pin command - 0x47 | 0x80
+CMD_SET = 0x53 | 0x80  # 'S' with MSB set = 0xD3
+CMD_GET = 0x47 | 0x80  # 'G' with MSB set = 0xC7
 
-# Pin definitions - tam olarak firmware pin numaralarıyla eşleşmelidir
-A0_PIN = 26  # RELAY pin (GPIO26)
-A1_PIN = 27  # A1 pin (GPIO27)
-A2_PIN = 28  # A2 pin (GPIO28)
+# Pin index definitions - should match the firmware indexes exactly
+A0_IDX = 19  # Relay pin index
+A1_IDX = 20  # A1 pin index
+A2_IDX = 21  # A2 pin index
 
 def print_hex(data):
     """Byte verisini okunabilir hex formatında yazdır"""
-    if isinstance(data, bytes):
+    if isinstance(data, bytes) or isinstance(data, bytearray):
         return ' '.join([f"0x{b:02X}" for b in data])
     elif isinstance(data, list):
         return ' '.join([f"0x{b:02X}" for b in data])
@@ -39,65 +39,77 @@ def drain_serial(ser, timeout=0.2):
     
     return data
 
-def send_direct_command(ser, cmd, pin, value=0):
-    """Send a raw command directly to the device."""
+def decode_value(low_byte, high_byte):
+    """Decode two 7-bit bytes into a 14-bit value as per protocol"""
+    return (high_byte << 7) | low_byte
+
+def send_command(ser, cmd, idx, value=0):
+    """Send a command to set or get a pin state
+    For SET commands, value should be 0 or 1
+    For GET commands, value is ignored"""
+    
     # Clear buffers first
     ser.reset_input_buffer()
     ser.reset_output_buffer()
     
-    # Send the 3-byte command
-    cmd_bytes = bytes([cmd, pin, value])
+    if cmd == CMD_SET:
+        # Protocol requires 5 bytes for SET: command, index, count=1, low_byte, high_byte
+        low_byte = value & 0x7F
+        high_byte = (value >> 7) & 0x7F
+        cmd_bytes = bytearray([cmd, idx, 1, low_byte, high_byte])
+    else:  # CMD_GET
+        # Protocol requires 3 bytes for GET: command, index, count=1
+        cmd_bytes = bytearray([cmd, idx, 1])
+    
     print(f"Gönderilen komut: {print_hex(cmd_bytes)}")
     ser.write(cmd_bytes)
     ser.flush()
     
-    # Wait for response
-    time.sleep(0.5)  # 500ms bekle
+    # Give device time to process
+    time.sleep(0.1)
+
+def read_response(ser, is_get=True):
+    """Read and process response
+    For GET, we expect 5 bytes: cmd, idx, count, low_byte, high_byte
+    For SET, may return command echo or nothing"""
     
-    # Read any data (both log and binary response)
-    if ser.in_waiting:
-        data = ser.read(ser.in_waiting)
-        print(f"Alınan veri ({len(data)} byte): {binascii.hexlify(data)}")
-        
-        # Analyze received data
-        if len(data) >= 3:
-            # Try to find the binary response packet
-            found = False
-            for i in range(len(data) - 2):
-                if data[i] == cmd and data[i+1] == pin:
-                    resp_value = data[i+2]
-                    print(f"! Yanıt paketi bulundu: {print_hex(data[i:i+3])}")
-                    print(f"! Pin {pin} durumu: {resp_value}")
-                    found = True
-                    return resp_value > 0
+    if is_get:
+        try:
+            # Read 5 bytes for GET response
+            response = ser.read(5)
+            if len(response) != 5:
+                print(f"Eksik yanıt: {len(response)} byte alındı, 5 bekleniyordu")
+                return False
             
-            if not found:
-                # Try to extract text status from logs
-                try:
-                    text = data.decode('utf-8', errors='replace')
-                    print("Log mesajları:")
-                    print(text)
-                    
-                    if cmd == CMD_SET_PIN:
-                        # SET komutu için, komutu gönderebildiysek ve hata mesajı yoksa
-                        # işlemin başarılı olduğunu varsayalım
-                        return True
-                    elif cmd == CMD_GET_PIN:
-                        # GET komutu için pin durumunu log'lardan çıkarmaya çalış
-                        if f"Pin {pin} state: 1" in text:
-                            print("Log'dan Pin AÇIK durumu tespit edildi")
-                            return True
-                        else:
-                            print("Log'dan Pin KAPALI durumu tespit edildi")
-                            return False
-                except:
-                    pass
-        
-        print("Geçerli yanıt alınamadı")
-        return False
+            # Extract and validate components
+            cmd, idx, count, low_byte, high_byte = response
+            if cmd != CMD_GET:
+                print(f"Yanıt komutu eşleşmiyor: {print_hex(cmd)}, beklenen: {print_hex(CMD_GET)}")
+                return False
+            
+            value = decode_value(low_byte, high_byte)
+            print(f"Yanıt: Komut={print_hex(cmd)}, Idx={idx}, Değer={value}")
+            return value > 0
+        except Exception as e:
+            print(f"Yanıt okuma hatası: {e}")
+            return False
     else:
-        print("Yanıt alınamadı (0 byte)")
-        return False
+        # For SET, we may get no response or just an echo
+        if ser.in_waiting:
+            response = ser.read(ser.in_waiting)
+            print(f"SET yanıtı: {print_hex(response)}")
+        return True  # Assume success for SET commands
+
+def set_pin(ser, idx, state):
+    """Set a pin state (1=on, 0=off)"""
+    send_command(ser, CMD_SET, idx, 1 if state else 0)
+    time.sleep(0.2)  # Give firmware time to process
+    return read_response(ser, is_get=False)
+
+def get_pin(ser, idx):
+    """Get a pin state"""
+    send_command(ser, CMD_GET, idx)
+    return read_response(ser)
 
 def main():
     # Parse command line arguments
@@ -142,50 +154,50 @@ def main():
         choice = input("Seçiminiz (1-9): ")
         
         if choice == '1':
-            print(f"RELAY pini (A0/GPIO {A0_PIN}) açılıyor...")
-            if send_direct_command(ser, CMD_SET_PIN, A0_PIN, 1):
+            print(f"RELAY pini (A0/IDX {A0_IDX}) açılıyor...")
+            if set_pin(ser, A0_IDX, True):
                 print("Fan açıldı!")
             else:
                 print("Fan açılamadı")
                 
         elif choice == '2':
-            print(f"RELAY pini (A0/GPIO {A0_PIN}) kapatılıyor...")
-            if send_direct_command(ser, CMD_SET_PIN, A0_PIN, 0):
+            print(f"RELAY pini (A0/IDX {A0_IDX}) kapatılıyor...")
+            if set_pin(ser, A0_IDX, False):
                 print("Fan kapatıldı!")
             else:
                 print("Fan kapatılamadı")
                 
         elif choice == '3':
-            print(f"RELAY pini (A0/GPIO {A0_PIN}) durumu okunuyor...")
-            if send_direct_command(ser, CMD_GET_PIN, A0_PIN, 0):
+            print(f"RELAY pini (A0/IDX {A0_IDX}) durumu okunuyor...")
+            if get_pin(ser, A0_IDX):
                 print("Fan AÇIK")
             else:
                 print("Fan KAPALI")
                 
         elif choice == '4':
-            print(f"A1 pini (GPIO {A1_PIN}) açılıyor...")
-            if send_direct_command(ser, CMD_SET_PIN, A1_PIN, 1):
+            print(f"A1 pini (IDX {A1_IDX}) açılıyor...")
+            if set_pin(ser, A1_IDX, True):
                 print("A1 pin açıldı!")
             else:
                 print("A1 pin açılamadı")
                 
         elif choice == '5':
-            print(f"A1 pini (GPIO {A1_PIN}) kapatılıyor...")
-            if send_direct_command(ser, CMD_SET_PIN, A1_PIN, 0):
+            print(f"A1 pini (IDX {A1_IDX}) kapatılıyor...")
+            if set_pin(ser, A1_IDX, False):
                 print("A1 pin kapatıldı!")
             else:
                 print("A1 pin kapatılamadı")
                 
         elif choice == '6':
-            print(f"A2 pini (GPIO {A2_PIN}) açılıyor...")
-            if send_direct_command(ser, CMD_SET_PIN, A2_PIN, 1):
+            print(f"A2 pini (IDX {A2_IDX}) açılıyor...")
+            if set_pin(ser, A2_IDX, True):
                 print("A2 pin açıldı!")
             else:
                 print("A2 pin açılamadı")
                 
         elif choice == '7':
-            print(f"A2 pini (GPIO {A2_PIN}) kapatılıyor...")
-            if send_direct_command(ser, CMD_SET_PIN, A2_PIN, 0):
+            print(f"A2 pini (IDX {A2_IDX}) kapatılıyor...")
+            if set_pin(ser, A2_IDX, False):
                 print("A2 pin kapatıldı!")
             else:
                 print("A2 pin kapatılamadı")

@@ -192,6 +192,8 @@ make -j$(nproc)
  make -j4
 ```
 
+sudo minicom -D /dev/ttyACM0
+
 cd /home/uyanik13/Desktop/SERVO_2040/servo-2040-code/build && make -j4
 
 # Chica Servo2040 Sürücü Araçları
