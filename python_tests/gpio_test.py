@@ -113,7 +113,7 @@ def get_pin(ser, idx):
 
 def main():
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Transistor Test for Servo 2040')
+    parser = argparse.ArgumentParser(description='Gpio Test for Servo 2040')
     parser.add_argument('--port', '-p', default='/dev/ttyACM0', help='Serial port device')
     parser.add_argument('--baud', '-b', type=int, default=115200, help='Baud rate')
     parser.add_argument('--timeout', '-t', type=float, default=1.0, help='Serial read timeout')
@@ -140,7 +140,7 @@ def main():
         sys.exit(1)
 
     while True:
-        print("\nTransistör Test Menüsü:")
+        print("\Gpio Test Menüsü:")
         print("1. Fanı Aç (A0)")
         print("2. Fanı Kapat (A0)")
         print("3. Fan Durumunu Oku (A0)")
