@@ -1,31 +1,68 @@
 #include "sensor_manager.hpp"
+#include "servo2040.hpp"
+#include "common/pimoroni_common.hpp"
+
+using namespace servo::servo2040;
+
+namespace {
+    constexpr float SHUNT_RESISTOR = servo::servo2040::SHUNT_RESISTOR;
+    constexpr float CURRENT_GAIN = servo::servo2040::CURRENT_GAIN;
+    constexpr float VOLTAGE_GAIN = servo::servo2040::VOLTAGE_GAIN;
+    constexpr float CURRENT_OFFSET = servo::servo2040::CURRENT_OFFSET;
+}
 
 SensorManager::SensorManager() :
-    _sensor_adc(servo::servo2040::SHARED_ADC),
-    _voltage_adc(servo::servo2040::SHARED_ADC, VOLTAGE_GAIN),
-    _current_adc(servo::servo2040::SHARED_ADC, CURRENT_GAIN, SHUNT_RESISTOR, CURRENT_OFFSET),
-    _mux(servo::servo2040::ADC_ADDR_0, 
-         servo::servo2040::ADC_ADDR_1, 
-         servo::servo2040::ADC_ADDR_2,
-         PIN_UNUSED, 
-         servo::servo2040::SHARED_ADC) {
+    _sensor_adc(SHARED_ADC),
+    _voltage_adc(SHARED_ADC, VOLTAGE_GAIN),
+    _current_adc(SHARED_ADC, CURRENT_GAIN, SHUNT_RESISTOR, CURRENT_OFFSET),
+    _mux(ADC_ADDR_0, 
+         ADC_ADDR_1, 
+         ADC_ADDR_2,
+         pimoroni::PIN_UNUSED, 
+         SHARED_ADC) {
 }
 
 void SensorManager::init() {
     // Dokunmatik sensörleri pull-down ile yapılandır
-    for (uint i = 0; i < servo::servo2040::NUM_SENSORS; i++) {
-        _mux.configure_pulls(servo::servo2040::SENSOR_1_ADDR + i, false, true);
+    for (uint i = 0; i < NUM_SENSORS; i++) {
+        _mux.configure_pulls(SENSOR_1_ADDR + i, false, true);
     }
 }
 
 float SensorManager::readVoltage() {
-    _mux.select(servo::servo2040::VOLTAGE_SENSE_ADDR);
-    return _voltage_adc.read_voltage();
+    _mux.select(VOLTAGE_SENSE_ADDR);
+    
+    // ADC stabilizasyonu için bekleme
+    sleep_us(100);
+    
+    // Birkaç örnek alıp ortalamasını hesapla
+    const int NUM_SAMPLES = 4;
+    float total = 0.0f;
+    
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+        total += _voltage_adc.read_voltage();
+        sleep_us(50);  // Örnekler arası kısa bekleme
+    }
+    
+    return total / NUM_SAMPLES;
 }
 
 float SensorManager::readCurrent() {
-    _mux.select(servo::servo2040::CURRENT_SENSE_ADDR);
-    return _current_adc.read_current();
+    _mux.select(CURRENT_SENSE_ADDR);
+    
+    // ADC stabilizasyonu için bekleme
+    sleep_us(100);
+    
+    // Birkaç örnek alıp ortalamasını hesapla
+    const int NUM_SAMPLES = 4;
+    float total = 0.0f;
+    
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+        total += _current_adc.read_current();
+        sleep_us(50);  // Örnekler arası kısa bekleme
+    }
+    
+    return total / NUM_SAMPLES;
 }
 
 float SensorManager::readTouchSensor(uint sensor_idx) {
@@ -33,9 +70,22 @@ float SensorManager::readTouchSensor(uint sensor_idx) {
         return 0.0f;
     }
     
-    uint address = servo::servo2040::SENSOR_1_ADDR + sensor_idx;
+    uint address = SENSOR_1_ADDR + sensor_idx;
     _mux.select(address);
-    return _sensor_adc.read_voltage();
+    
+    // ADC stabilizasyonu için bekleme
+    sleep_us(100);
+    
+    // Birkaç örnek alıp ortalamasını hesapla
+    const int NUM_SAMPLES = 4;
+    float total = 0.0f;
+    
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+        total += _sensor_adc.read_voltage();
+        sleep_us(50);  // Örnekler arası kısa bekleme
+    }
+    
+    return total / NUM_SAMPLES;
 }
 
 float SensorManager::readAnalogPin(uint analog_pin) {
@@ -53,5 +103,5 @@ uint SensorManager::decodeValue(uint8_t low_byte, uint8_t high_byte) {
 }
 
 bool SensorManager::_isValidSensorIdx(uint sensor_idx) {
-    return (sensor_idx < servo::servo2040::NUM_SENSORS);
+    return (sensor_idx < NUM_SENSORS);
 } 
